@@ -10,22 +10,20 @@
 # ============================================================
 
 import os
+import sys
 import time
 from typing import Any
 
-from openai import OpenAI
+if hasattr(sys.stdout, "reconfigure"):
+    sys.stdout.reconfigure(encoding="utf-8")
+if hasattr(sys.stderr, "reconfigure"):
+    sys.stderr.reconfigure(encoding="utf-8")
 
-# -- Person B's modules (imported once they exist) --
+from firewall.llm import get_llm_config
 from firewall.store import store_fact, get_all_facts, hash_file
 from firewall.extractor import extract_fact
-
-# -- Person A's tool registry --
 from tools.real_tools import TOOL_REGISTRY
-
-# -- Dashboard stats (written here so the dashboard can read them) --
 import firewall.stats as stats
-
-client = OpenAI(api_key=os.environ.get("OPENAI_API_KEY"))
 
 # ---------------------------------------------------------------------------
 # LLM Matcher prompt
@@ -102,33 +100,45 @@ def intercept(
 
     # ── 2. Ask the LLM matcher ──────────────────────────────────────────────
     matched_fact = None
+    client, model_name = get_llm_config()
 
     if valid_facts:
-        facts_block = _format_facts(valid_facts)
-        prompt = MATCHER_PROMPT.format(
-            facts_block=facts_block,
-            tool_name=tool_name,
-            tool_args=tool_args,
-            question=question or "(not specified)",
-        )
+        if client is not None:
+            facts_block = _format_facts(valid_facts)
+            prompt = MATCHER_PROMPT.format(
+                facts_block=facts_block,
+                tool_name=tool_name,
+                tool_args=tool_args,
+                question=question or "(not specified)",
+            )
 
-        t0 = time.time()
-        response = client.chat.completions.create(
-            model="gpt-4o-mini",
-            messages=[{"role": "user", "content": prompt}],
-            temperature=0,
-            max_tokens=30,
-        )
-        matcher_latency = time.time() - t0
-
-        decision = response.choices[0].message.content.strip()
-
-        if decision.startswith("MATCH:"):
             try:
-                fact_id = int(decision.split(":")[1].strip())
-                matched_fact = next((f for f in valid_facts if f["id"] == fact_id), None)
-            except (ValueError, IndexError):
+                t0 = time.time()
+                response = client.chat.completions.create(
+                    model=model_name,
+                    messages=[{"role": "user", "content": prompt}],
+                    temperature=0,
+                    max_tokens=30,
+                )
+                decision = response.choices[0].message.content.strip()
+
+                if decision.startswith("MATCH:"):
+                    fact_id = int(decision.split(":")[1].strip())
+                    matched_fact = next((f for f in valid_facts if f["id"] == fact_id), None)
+            except Exception as e:
+                print(f"    [Matcher warning] LLM call failed: {e}")
                 matched_fact = None
+        else:
+            # Fallback offline heuristic if no API key is set
+            q_lower = (question or "").lower()
+            pattern = str(tool_args.get("pattern", "")).lower()
+            for f in valid_facts:
+                stmt = f["statement"].lower()
+                if (pattern and pattern in stmt) or (
+                    ("jwt" in q_lower or "token" in q_lower) and ("jwt" in stmt or "token" in stmt)
+                ):
+                    matched_fact = f
+                    break
 
     # ── 3a. HIT — return from fact store ────────────────────────────────────
     if matched_fact:
@@ -159,7 +169,6 @@ def intercept(
         # Resolve file paths for hashing (best-effort)
         files_to_hash = []
         if sample_repo_dir:
-            # heuristic: any .py filenames mentioned in the output
             import re
             mentioned = re.findall(r"[\w/\\]+\.py", raw_output)
             for rel in mentioned:

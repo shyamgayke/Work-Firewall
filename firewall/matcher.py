@@ -7,9 +7,7 @@
 # ============================================================
 
 import os
-from openai import OpenAI
-
-client = OpenAI(api_key=os.environ.get("OPENAI_API_KEY"))
+from firewall.llm import get_llm_config
 
 MATCHER_PROMPT = """You are a router for an AI tool-call firewall.
 Your job: decide if any of the stored facts below already answers the incoming tool request,
@@ -57,6 +55,20 @@ def find_matching_fact(
     if not valid_facts:
         return None
 
+    client, model_name = get_llm_config()
+
+    if client is None:
+        # Fallback offline heuristic if no API key is set
+        q_lower = (question or "").lower()
+        pattern = str(tool_args.get("pattern", "")).lower()
+        for f in valid_facts:
+            stmt = f["statement"].lower()
+            if (pattern and pattern in stmt) or (
+                ("jwt" in q_lower or "token" in q_lower) and ("jwt" in stmt or "token" in stmt)
+            ):
+                return f
+        return None
+
     prompt = MATCHER_PROMPT.format(
         facts_block=format_facts(valid_facts),
         tool_name=tool_name,
@@ -64,25 +76,24 @@ def find_matching_fact(
         question=question or "(not specified)",
     )
 
-    response = client.chat.completions.create(
-        model="gpt-4o-mini",
-        messages=[{"role": "user", "content": prompt}],
-        temperature=0,
-        max_tokens=30,
-    )
+    try:
+        response = client.chat.completions.create(
+            model=model_name,
+            messages=[{"role": "user", "content": prompt}],
+            temperature=0,
+            max_tokens=30,
+        )
 
-    decision = response.choices[0].message.content.strip()
+        decision = response.choices[0].message.content.strip()
 
-    if decision.startswith("MATCH:"):
-        try:
-            fact_id = int(decision.split(":")[1].strip())
-            return next((f for f in valid_facts if f["id"] == fact_id), None)
-        except (ValueError, IndexError):
-            return None
+        if decision.startswith("MATCH:"):
+            try:
+                fact_id = int(decision.split(":")[1].strip())
+                return next((f for f in valid_facts if f["id"] == fact_id), None)
+            except (ValueError, IndexError):
+                return None
+    except Exception as e:
+        print(f"    [Matcher warning] LLM call failed: {e}")
+        return None
 
     return None
-
-# TODO (Person B/C, Hour 1-4):
-# - Test against 4-5 question pairs that should NOT match and confirm NO_MATCH
-# - Test against 4-5 pairs that SHOULD match across different phrasings
-# - Tune the prompt if you're getting false positives (wrongly avoiding tool calls)

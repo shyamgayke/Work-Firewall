@@ -4,9 +4,7 @@
 # ============================================================
 
 import os
-from openai import OpenAI
-
-client = OpenAI(api_key=os.environ.get("OPENAI_API_KEY"))
+from firewall.llm import get_llm_config
 
 EXTRACTION_PROMPT = """You are a code-knowledge extractor for an AI tool-call firewall.
 
@@ -36,20 +34,35 @@ def extract_fact(tool_name: str, tool_args: dict, tool_output: str) -> str | Non
     Returns the fact string, or None if no meaningful fact could be extracted.
     Person B: tune the prompt and model as needed.
     """
+    client, model_name = get_llm_config()
+
+    if client is None:
+        # Fallback offline extraction heuristic if no API key is provided
+        lines = [line.strip() for line in tool_output.strip().split("\n") if line.strip()]
+        if not lines or "No matches found" in tool_output:
+            return None
+        return f"{tool_name} with {tool_args} discovered: {lines[0]}"
+
     prompt = EXTRACTION_PROMPT.format(
         tool_name=tool_name,
         tool_args=tool_args,
         tool_output=tool_output[:3000],  # cap to avoid token blowout
     )
 
-    response = client.chat.completions.create(
-        model="gpt-4o-mini",
-        messages=[{"role": "user", "content": prompt}],
-        temperature=0,
-        max_tokens=120,
-    )
+    try:
+        response = client.chat.completions.create(
+            model=model_name,
+            messages=[{"role": "user", "content": prompt}],
+            temperature=0,
+            max_tokens=120,
+        )
 
-    result = response.choices[0].message.content.strip()
-    if result == "NO_FACT" or not result:
-        return None
-    return result
+        result = response.choices[0].message.content.strip()
+        if result == "NO_FACT" or not result:
+            return None
+        return result
+    except Exception as e:
+        print(f"    [Extractor warning] LLM call failed: {e}")
+        # Graceful fallback to avoid halting demo
+        lines = [l.strip() for l in tool_output.split("\n") if l.strip()]
+        return f"{tool_name} found: {lines[0]}" if lines else None

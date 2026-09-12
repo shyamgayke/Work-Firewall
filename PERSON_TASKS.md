@@ -9,9 +9,9 @@
 
 ```bash
 # 1. Clone / open the repo
-# 2. Set your API key
+# 2. Set your API key (Google Gemini or OpenAI)
 cp .env.example .env
-# Edit .env and paste in OPENAI_API_KEY=sk-...
+# Edit .env and paste your GOOGLE_API_KEY=AIzaSy... (or OPENAI_API_KEY)
 
 # 3. Install deps (already done if packages are present)
 pip install -r requirements.txt

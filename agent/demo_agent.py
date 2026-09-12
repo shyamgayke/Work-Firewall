@@ -7,6 +7,12 @@
 import os
 import sys
 
+# Ensure utf-8 stdout on Windows terminals
+if hasattr(sys.stdout, "reconfigure"):
+    sys.stdout.reconfigure(encoding="utf-8")
+if hasattr(sys.stderr, "reconfigure"):
+    sys.stderr.reconfigure(encoding="utf-8")
+
 # Make sure project root is on path
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
 

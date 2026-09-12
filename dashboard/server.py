@@ -72,6 +72,20 @@ async def invalidate_fact(fact_id: int):
     return {"success": True, "deleted_id": fact_id}
 
 
+from pydantic import BaseModel
+from firewall.proxy import query_firewall
+
+class QueryRequest(BaseModel):
+    prompt: str = ""
+    question: str = ""
+
+@app.post("/api/query")
+async def handle_query(req: QueryRequest):
+    p = req.prompt or req.question
+    if not p:
+        raise HTTPException(status_code=400, detail="Missing prompt or question")
+    return query_firewall(p)
+
 @app.post("/api/reset")
 async def reset_session():
     clear_facts()

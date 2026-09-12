@@ -23,6 +23,52 @@ export function activate(context: vscode.ExtensionContext) {
       provider.refresh();
     })
   );
+
+  // ── GitHub Copilot Chat Participant (@firewall) ────────────────────────────
+  // When user opens Copilot chat and types @firewall <question>, Work Firewall handles it!
+  try {
+    if (typeof (vscode as any).chat?.createChatParticipant === 'function') {
+      const participant = (vscode as any).chat.createChatParticipant(
+        'workfirewall',
+        async (
+          request: any,
+          _chatContext: any,
+          response: any,
+          _token: vscode.CancellationToken
+        ) => {
+          response.markdown(`*🔍 Checking Work Firewall institutional memory…*\n\n`);
+          try {
+            const prompt = request.prompt;
+            const resJson = await httpPostJson(
+              `${DASHBOARD_URL}/api/query`,
+              JSON.stringify({ prompt })
+            );
+            const data = JSON.parse(resJson);
+
+            if (data.matched) {
+              response.markdown(`### 🛡️ Work Firewall — Memory Hit! (Avoided)\n`);
+              response.markdown(`⚡ **Reused Fact #${data.fact?.id || ''}:**\n> ${data.statement}\n\n`);
+              response.markdown(`✅ **Tool call avoided!** Saved 1 tool execution and context window tokens.\n\n`);
+              if (data.files && data.files.length) {
+                const filenames = data.files.map((f: string) => f.split(/[\\/]/).pop()).join(', ');
+                response.markdown(`*Cryptographic Provenance:* \`${filenames}\` (SHA-256 verified)`);
+              }
+            } else {
+              response.markdown(`### 🔧 Work Firewall — Real Tool Executed\n`);
+              response.markdown(`Investigated codebase and synthesized new institutional fact:\n> ${data.statement}\n\n`);
+              response.markdown(`💾 *Stored in institutional memory for future queries.*`);
+            }
+            provider.refresh();
+          } catch (err: any) {
+            response.markdown(`⚠️ **Work Firewall Error:** ${err.message}\nMake sure dashboard is running: \`python run_all.py\``);
+          }
+        }
+      );
+      context.subscriptions.push(participant);
+    }
+  } catch (err) {
+    console.error('Chat Participant registration failed:', err);
+  }
 }
 
 export function deactivate() {}
@@ -30,7 +76,7 @@ export function deactivate() {}
 // ── Sidebar WebView Provider ─────────────────────────────────────────────────
 class FirewallSidebarProvider implements vscode.WebviewViewProvider {
   private _view?: vscode.WebviewView;
-  private _interval?: NodeJS.Timer;
+  private _interval?: NodeJS.Timeout;
 
   constructor(private readonly _extensionUri: vscode.Uri) {}
 
@@ -45,6 +91,25 @@ class FirewallSidebarProvider implements vscode.WebviewViewProvider {
 
     // Handle messages from webview
     webviewView.webview.onDidReceiveMessage(async (msg) => {
+      if (msg.command === 'query') {
+        try {
+          const resStr = await httpPostJson(
+            `${DASHBOARD_URL}/api/query`,
+            JSON.stringify({ prompt: msg.prompt })
+          );
+          const data = JSON.parse(resStr);
+          this._view?.webview.postMessage({
+            type: 'queryResult',
+            data,
+          });
+          this.refresh();
+        } catch (e: any) {
+          this._view?.webview.postMessage({
+            type: 'queryResult',
+            data: { error: e.message },
+          });
+        }
+      }
       if (msg.command === 'invalidate') {
         await httpPost(`${DASHBOARD_URL}/api/facts/${msg.factId}/invalidate`);
         this.refresh();
@@ -71,7 +136,7 @@ class FirewallSidebarProvider implements vscode.WebviewViewProvider {
   }
 
   private _stopPolling() {
-    if (this._interval) clearInterval(this._interval as NodeJS.Timeout);
+    if (this._interval) clearInterval(this._interval);
   }
 
   private async _pushUpdate() {
@@ -102,6 +167,7 @@ class FirewallSidebarProvider implements vscode.WebviewViewProvider {
   <style>
     :root {
       --accent: #6366f1;
+      --accent-hover: #4f46e5;
       --green:  #22c55e;
       --red:    #f87171;
       --blue:   #38bdf8;
@@ -125,12 +191,103 @@ class FirewallSidebarProvider implements vscode.WebviewViewProvider {
       padding: 4px 8px;
       background: var(--vscode-statusBar-background);
       border-radius: 4px;
-      margin-bottom: 10px;
+      margin-bottom: 8px;
       font-size: 11px;
       color: var(--vscode-statusBar-foreground);
     }
     .dot { width:6px; height:6px; border-radius:50%; background: var(--green); }
     .dot.offline { background: var(--red); }
+
+    /* Interactive Prompt Box */
+    .prompt-section {
+      background: var(--vscode-input-background);
+      border: 1px solid var(--vscode-input-border);
+      border-radius: 6px;
+      padding: 8px;
+      margin-bottom: 10px;
+    }
+    .prompt-title {
+      font-size: 10px;
+      font-weight: 600;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+      opacity: 0.7;
+      margin-bottom: 6px;
+      display: flex;
+      align-items: center;
+      gap: 5px;
+    }
+    .prompt-input-row {
+      display: flex;
+      gap: 4px;
+      margin-bottom: 6px;
+    }
+    .prompt-input {
+      flex: 1;
+      background: var(--vscode-sideBar-background);
+      border: 1px solid var(--vscode-input-border);
+      color: var(--vscode-foreground);
+      padding: 5px 7px;
+      font-size: 11px;
+      border-radius: 4px;
+      outline: none;
+    }
+    .prompt-input:focus {
+      border-color: var(--accent);
+    }
+    .btn-ask {
+      background: var(--accent);
+      color: #fff;
+      border: none;
+      padding: 0 10px;
+      font-size: 11px;
+      font-weight: 600;
+      border-radius: 4px;
+      cursor: pointer;
+    }
+    .btn-ask:hover { background: var(--accent-hover); }
+
+    .chips-row {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 4px;
+      margin-bottom: 6px;
+    }
+    .chip {
+      font-size: 9px;
+      background: rgba(99,102,241,0.12);
+      border: 1px solid rgba(99,102,241,0.3);
+      color: var(--accent);
+      padding: 2px 6px;
+      border-radius: 10px;
+      cursor: pointer;
+    }
+    .chip:hover {
+      background: rgba(99,102,241,0.25);
+    }
+
+    .query-banner {
+      margin-top: 6px;
+      padding: 6px 8px;
+      border-radius: 4px;
+      font-size: 11px;
+      line-height: 1.4;
+      display: none;
+      animation: fadeIn 0.2s;
+    }
+    @keyframes fadeIn { from { opacity:0; } to { opacity:1; } }
+    .query-banner.hit {
+      background: rgba(34,197,94,0.12);
+      border: 1px solid var(--green);
+      color: var(--green);
+    }
+    .query-banner.miss {
+      background: rgba(56,189,248,0.12);
+      border: 1px solid var(--blue);
+      color: var(--blue);
+    }
+    .query-banner-title { font-weight: 700; margin-bottom: 2px; }
+    .query-banner-body { color: var(--vscode-foreground); font-size: 10.5px; margin-top: 2px; }
 
     /* Stats grid */
     .stats-grid {
@@ -215,6 +372,26 @@ class FirewallSidebarProvider implements vscode.WebviewViewProvider {
   </div>
 
   <div id="content" style="display:none">
+    <!-- Interactive Prompt Section -->
+    <div class="prompt-section">
+      <div class="prompt-title">💬 Ask Firewall / Agent Prompt</div>
+      <div class="prompt-input-row">
+        <input type="text" id="prompt-input" class="prompt-input" placeholder="e.g. Where is JWT verified?" />
+        <button class="btn-ask" id="btn-ask" onclick="submitPrompt()">Ask</button>
+      </div>
+      <div class="chips-row">
+        <span class="chip" onclick="quickAsk('Where is JWT validated?')">JWT Auth</span>
+        <span class="chip" onclick="quickAsk('How are passwords secured?')">Passwords</span>
+        <span class="chip" onclick="quickAsk('What database is used?')">Database</span>
+        <span class="chip" onclick="quickAsk('What files exist?')">Files</span>
+      </div>
+      <div id="query-banner" class="query-banner">
+        <div id="query-banner-title" class="query-banner-title"></div>
+        <div id="query-banner-body" class="query-banner-body"></div>
+      </div>
+    </div>
+
+    <!-- Stats Grid -->
     <div class="stats-grid">
       <div class="stat-box">
         <div class="stat-label">Total</div>
@@ -252,7 +429,7 @@ class FirewallSidebarProvider implements vscode.WebviewViewProvider {
     </div>
   </div>
 
-  <div id="offline-msg" style="display:none">🔌 Dashboard offline<br/>Start: <code>uvicorn dashboard.server:app --port 8000</code></div>
+  <div id="offline-msg" style="display:none">🔌 Dashboard offline<br/>Start: <code>python run_all.py</code></div>
 
   <script>
     const vscode = acquireVsCodeApi();
@@ -261,12 +438,51 @@ class FirewallSidebarProvider implements vscode.WebviewViewProvider {
       vscode.postMessage({ command, factId });
     }
 
+    function submitPrompt() {
+      const input = document.getElementById('prompt-input');
+      const val = input.value.trim();
+      if (!val) return;
+      document.getElementById('btn-ask').textContent = '...';
+      vscode.postMessage({ command: 'query', prompt: val });
+    }
+
+    function quickAsk(text) {
+      document.getElementById('prompt-input').value = text;
+      submitPrompt();
+    }
+
+    document.getElementById('prompt-input')?.addEventListener('keydown', e => {
+      if (e.key === 'Enter') submitPrompt();
+    });
+
     function esc(s) {
       return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
     }
 
     window.addEventListener('message', ev => {
       const msg = ev.data;
+
+      if (msg.type === 'queryResult') {
+        document.getElementById('btn-ask').textContent = 'Ask';
+        const banner = document.getElementById('query-banner');
+        const bTitle = document.getElementById('query-banner-title');
+        const bBody = document.getElementById('query-banner-body');
+
+        banner.style.display = 'block';
+        if (msg.data.matched) {
+          banner.className = 'query-banner hit';
+          bTitle.innerHTML = '⚡ MEMORY HIT — Tool Call Avoided!';
+          bBody.innerHTML = '<strong>Reused Fact #' + (msg.data.fact?.id || '') + ':</strong> ' + esc(msg.data.statement);
+        } else if (msg.data.error) {
+          banner.className = 'query-banner miss';
+          bTitle.innerHTML = '⚠️ Error';
+          bBody.innerHTML = esc(msg.data.error);
+        } else {
+          banner.className = 'query-banner miss';
+          bTitle.innerHTML = '🔧 Real Tool Executed';
+          bBody.innerHTML = esc(msg.data.statement || msg.data.message);
+        }
+      }
 
       if (msg.type === 'error') {
         document.getElementById('content').style.display = 'none';
@@ -350,6 +566,31 @@ function httpPost(url: string): Promise<void> {
   return new Promise((resolve, reject) => {
     const req = http.request(url, { method: 'POST', timeout: 2000 }, () => resolve());
     req.on('error', reject);
+    req.end();
+  });
+}
+
+function httpPostJson(url: string, body: string): Promise<string> {
+  return new Promise((resolve, reject) => {
+    const parsed = new URL(url);
+    const req = http.request(
+      url,
+      {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Content-Length': Buffer.byteLength(body),
+        },
+        timeout: 5000,
+      },
+      (res) => {
+        let data = '';
+        res.on('data', c => data += c);
+        res.on('end', () => resolve(data));
+      }
+    );
+    req.on('error', reject);
+    req.write(body);
     req.end();
   });
 }

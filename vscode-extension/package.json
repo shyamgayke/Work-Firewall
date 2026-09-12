@@ -34,6 +34,15 @@
         }
       ]
     },
+    "chatParticipants": [
+      {
+        "id": "workfirewall",
+        "name": "firewall",
+        "fullName": "Work Firewall",
+        "description": "Ask questions about the codebase with Work Firewall memory.",
+        "isSticky": true
+      }
+    ],
     "commands": [
       {
         "command": "workFirewall.reset",

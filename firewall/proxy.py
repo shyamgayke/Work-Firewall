@@ -192,3 +192,86 @@ def intercept(
     stats.record_executed(call_label, new_fact, tool_latency)
     push_executed(call_label, new_fact)
     return raw_output
+
+
+def query_firewall(prompt: str, repo_dir: str = None) -> dict:
+    """
+    High-level natural language query entry point.
+    Checks similarity against all valid facts. If matched, reuses fact (AVOIDED).
+    If not, executes tool, extracts fact, stores it, and returns result (EXECUTED).
+    """
+    if not repo_dir:
+        repo_dir = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "sample_repo")
+
+    all_facts = get_all_facts()
+    valid_facts = filter_valid_facts(all_facts)
+
+    # Check similarity against stored facts
+    matched = _llm_match(
+        tool_name="natural_query",
+        tool_args={"prompt": prompt},
+        question=prompt,
+        valid_facts=valid_facts,
+    )
+    if not matched:
+        matched = _keyword_match(tool_args={"pattern": prompt}, question=prompt, valid_facts=valid_facts)
+
+    if matched:
+        call_label = f"query('{prompt[:40]}...')"
+        stats.record_avoided(call_label, matched)
+        push_avoided(call_label, matched)
+        return {
+            "status": "avoided",
+            "matched": True,
+            "fact": matched,
+            "statement": matched["statement"],
+            "files": matched.get("files", []),
+            "source": matched.get("source_tool_call", ""),
+            "message": f"⚡ Work Firewall memory hit! Reused Fact #{matched['id']}: {matched['statement']}"
+        }
+
+    # If not matched, deduce tool to run based on prompt keywords
+    p_lower = prompt.lower()
+    if "jwt" in p_lower or "token" in p_lower:
+        tool_name = "grep_search"
+        tool_args = {"pattern": "jwt", "directory": repo_dir}
+    elif "password" in p_lower or "hash" in p_lower or "bcrypt" in p_lower:
+        tool_name = "grep_search"
+        tool_args = {"pattern": "bcrypt|hash_password|hashpw", "directory": repo_dir}
+    elif "db" in p_lower or "database" in p_lower or "sql" in p_lower:
+        tool_name = "grep_search"
+        tool_args = {"pattern": "sqlite|database|db", "directory": repo_dir}
+    elif "list" in p_lower or ("file" in p_lower and "structure" in p_lower):
+        tool_name = "list_files"
+        tool_args = {"directory": repo_dir}
+    elif "auth" in p_lower:
+        tool_name = "read_file"
+        tool_args = {"filepath": os.path.join(repo_dir, "auth.py")}
+    else:
+        words = [w for w in re.findall(r"\w+", p_lower) if len(w) > 3]
+        term = words[0] if words else "def"
+        tool_name = "grep_search"
+        tool_args = {"pattern": term, "directory": repo_dir}
+
+    raw_output = intercept(
+        tool_name=tool_name,
+        tool_args=tool_args,
+        question=prompt,
+        sample_repo_dir=repo_dir,
+        firewall_enabled=True,
+    )
+
+    latest_facts = get_all_facts()
+    latest = latest_facts[0] if latest_facts else None
+
+    return {
+        "status": "executed",
+        "matched": False,
+        "fact": latest,
+        "statement": latest["statement"] if latest else f"Investigated with {tool_name}",
+        "files": latest.get("files", []) if latest else [],
+        "source": f"{tool_name}({tool_args})",
+        "raw_output": raw_output[:300],
+        "message": f"🔧 Executed {tool_name} and discovered new institutional fact: {latest['statement'] if latest else raw_output[:100]}"
+    }
+

@@ -1,0 +1,65 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Work Firewall — Dashboard</title>
+  <style>
+    /* ── TODO (Person C, Hour 4-7): build the real dashboard here ── */
+    body { font-family: monospace; background: #0d1117; color: #c9d1d9; padding: 2rem; }
+    h1   { color: #58a6ff; }
+    pre  { background: #161b22; padding: 1rem; border-radius: 6px; }
+    .stat { display: inline-block; margin: 1rem; padding: 1rem 2rem;
+            background: #21262d; border-radius: 8px; text-align: center; }
+    .stat .num { font-size: 2rem; font-weight: bold; color: #3fb950; }
+    .stat .lbl { font-size: 0.8rem; color: #8b949e; }
+  </style>
+</head>
+<body>
+  <h1>🔥 Work Firewall — Live Dashboard</h1>
+  <p style="color:#8b949e">Polling every 2 seconds...</p>
+
+  <div id="stats-bar">
+    <div class="stat"><div class="num" id="total">–</div><div class="lbl">Total Calls</div></div>
+    <div class="stat"><div class="num" id="avoided" style="color:#3fb950">–</div><div class="lbl">✅ Avoided</div></div>
+    <div class="stat"><div class="num" id="executed" style="color:#f78166">–</div><div class="lbl">🔧 Executed</div></div>
+    <div class="stat"><div class="num" id="rate">–</div><div class="lbl">Avoidance Rate</div></div>
+  </div>
+
+  <h2>Stored Facts</h2>
+  <div id="facts-list"><p style="color:#8b949e">No facts yet.</p></div>
+
+  <script>
+    // TODO (Person C, Hour 4-7): expand this into a proper real-time activity feed
+
+    async function refresh() {
+      try {
+        // Stats
+        const s = await fetch('/api/stats').then(r => r.json());
+        document.getElementById('total').textContent   = s.total_calls;
+        document.getElementById('avoided').textContent = s.avoided;
+        document.getElementById('executed').textContent= s.executed;
+        document.getElementById('rate').textContent    = s.avoidance_rate + '%';
+
+        // Facts
+        const facts = await fetch('/api/facts').then(r => r.json());
+        const el = document.getElementById('facts-list');
+        if (!facts.length) {
+          el.innerHTML = '<p style="color:#8b949e">No facts yet.</p>';
+        } else {
+          el.innerHTML = facts.map(f => `
+            <pre><strong>#${f.id}</strong>  ${f.statement}
+  source: ${f.source_tool_call}
+  files : ${f.files.join(', ') || 'none'}</pre>
+          `).join('');
+        }
+      } catch(e) {
+        // server not running yet — silently ignore
+      }
+    }
+
+    refresh();
+    setInterval(refresh, 2000);
+  </script>
+</body>
+</html>

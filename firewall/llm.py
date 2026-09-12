@@ -25,7 +25,7 @@ def get_llm_config():
             api_key=google_key,
             base_url="https://generativelanguage.googleapis.com/v1beta/openai/",
         )
-        return client, "gemini-1.5-flash"
+        return client, "gemini-flash-latest"
 
     if openai_key and not openai_key.startswith("your-"):
         client = OpenAI(api_key=openai_key)

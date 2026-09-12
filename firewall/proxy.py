@@ -118,18 +118,23 @@ def intercept(
                     model=model_name,
                     messages=[{"role": "user", "content": prompt}],
                     temperature=0,
-                    max_tokens=30,
+                    max_tokens=200,
                 )
-                decision = response.choices[0].message.content.strip()
-
-                if decision.startswith("MATCH:"):
-                    fact_id = int(decision.split(":")[1].strip())
-                    matched_fact = next((f for f in valid_facts if f["id"] == fact_id), None)
+                raw_decision = response.choices[0].message.content
+                if raw_decision:
+                    decision = raw_decision.strip()
+                    if "MATCH:" in decision:
+                        import re
+                        m = re.search(r"MATCH:\s*(\d+)", decision)
+                        if m:
+                            fact_id = int(m.group(1))
+                            matched_fact = next((f for f in valid_facts if f["id"] == fact_id), None)
             except Exception as e:
-                print(f"    [Matcher warning] LLM call failed: {e}")
+                print(f"    [Matcher info] LLM call fallback: {e}")
                 matched_fact = None
-        else:
-            # Fallback offline heuristic if no API key is set
+
+        # Fallback offline semantic check if LLM didn't match or had an issue
+        if not matched_fact:
             q_lower = (question or "").lower()
             pattern = str(tool_args.get("pattern", "")).lower()
             for f in valid_facts:

@@ -54,10 +54,13 @@ def extract_fact(tool_name: str, tool_args: dict, tool_output: str) -> str | Non
             model=model_name,
             messages=[{"role": "user", "content": prompt}],
             temperature=0,
-            max_tokens=120,
+            max_tokens=500,
         )
 
-        result = response.choices[0].message.content.strip()
+        raw_content = response.choices[0].message.content
+        if not raw_content:
+            return None
+        result = raw_content.strip()
         if result == "NO_FACT" or not result:
             return None
         return result

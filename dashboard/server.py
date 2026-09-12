@@ -1,68 +1,79 @@
-# ============================================================
-# dashboard/server.py  — Person C's file (Hour 4-7)
-#
-# FastAPI dashboard backend.
-# Exposes /api/stats and /api/facts for the HTML frontend.
-#
-# HOUR 0-1: Not needed yet — stub file so Person C can start it later.
-# HOUR 4-7: Implement the endpoints and run with:
-#            uvicorn dashboard.server:app --reload --port 8000
-# ============================================================
+"""
+dashboard/server.py — Work Firewall FastAPI dashboard backend
 
-from fastapi import FastAPI
-from fastapi.staticfiles import StaticFiles
-from fastapi.responses import FileResponse
+Endpoints:
+  GET  /               → serve dashboard HTML
+  GET  /api/stats      → session statistics + cost/latency savings
+  GET  /api/facts      → all stored facts with validity status
+  GET  /api/activity   → last 50 activity events (newest first)
+  POST /api/facts/{id}/invalidate → manually delete a fact
+  POST /api/reset      → reset session stats + clear all facts
+"""
+
+import sys
 import os
 
+sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+
+from fastapi import FastAPI, HTTPException
+from fastapi.staticfiles import StaticFiles
+from fastapi.responses import HTMLResponse, FileResponse
+from fastapi.middleware.cors import CORSMiddleware
+
 import firewall.stats as stats
-from firewall.store import get_all_facts
+from firewall.store import get_all_facts, delete_fact, clear_facts, get_activity_log
+from firewall.validator import is_fact_valid
 
-app = FastAPI(title="Work Firewall Dashboard")
+app = FastAPI(title="Work Firewall Dashboard", version="2.0")
 
-# Serve the static HTML dashboard
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
+
 STATIC_DIR = os.path.join(os.path.dirname(__file__), "static")
-app.mount("/static", StaticFiles(directory=STATIC_DIR), name="static")
 
 
-@app.get("/")
-def root():
-    """Serve the dashboard HTML."""
-    return FileResponse(os.path.join(STATIC_DIR, "index.html"))
+@app.get("/", response_class=HTMLResponse)
+async def root():
+    index_path = os.path.join(STATIC_DIR, "index.html")
+    with open(index_path, encoding="utf-8") as f:
+        return f.read()
 
 
 @app.get("/api/stats")
-def get_stats():
-    """Return session statistics: total calls, avoided, executed, avoidance rate."""
+async def get_stats():
     return stats.get_summary()
 
 
 @app.get("/api/facts")
-def get_facts():
-    """Return all stored facts with their provenance."""
-    facts = get_all_facts()
-    # Don't send raw_output to the frontend — keep it light
-    return [
-        {
-            "id": f["id"],
-            "statement": f["statement"],
-            "files": f["files"],
-            "source_tool_call": f["source_tool_call"],
-            "created_at": f["created_at"],
-        }
-        for f in facts
-    ]
+async def get_facts():
+    all_facts = get_all_facts()
+    result = []
+    for f in all_facts:
+        entry = dict(f)
+        entry["is_valid"] = is_fact_valid(f)
+        result.append(entry)
+    return {"facts": result, "total": len(result)}
 
 
-@app.delete("/api/facts/{fact_id}")
-def invalidate_fact(fact_id: int):
-    """
-    Manually invalidate a fact (e.g., if the human inspector spots a wrong fact).
-    TODO (Person C, Hour 4-7): implement manual deletion in store.py.
-    """
-    return {"status": "not_implemented_yet", "fact_id": fact_id}
+@app.get("/api/activity")
+async def get_activity():
+    return {"events": get_activity_log()}
 
 
-# TODO (Person C, Hour 4-7):
-# - Add POST /api/reset to reset the session stats (useful between demo runs)
-# - Add the manual invalidation endpoint above
-# - Run with: uvicorn dashboard.server:app --reload --port 8000
+@app.post("/api/facts/{fact_id}/invalidate")
+async def invalidate_fact(fact_id: int):
+    deleted = delete_fact(fact_id)
+    if not deleted:
+        raise HTTPException(status_code=404, detail=f"Fact {fact_id} not found")
+    return {"success": True, "deleted_id": fact_id}
+
+
+@app.post("/api/reset")
+async def reset_session():
+    clear_facts()
+    stats.reset()
+    return {"success": True, "message": "Session reset: all facts cleared, stats zeroed"}

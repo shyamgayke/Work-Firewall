@@ -1,0 +1,58 @@
+{
+  "name": "work-firewall",
+  "displayName": "Work Firewall",
+  "description": "AI agent institutional memory — see tool-call savings and fact reuse in real time.",
+  "version": "1.0.0",
+  "publisher": "hackbattle",
+  "engines": {
+    "vscode": "^1.90.0"
+  },
+  "categories": [
+    "Other",
+    "Machine Learning"
+  ],
+  "activationEvents": [
+    "onStartupFinished"
+  ],
+  "main": "./out/extension.js",
+  "contributes": {
+    "viewsContainers": {
+      "activitybar": [
+        {
+          "id": "work-firewall",
+          "title": "Work Firewall",
+          "icon": "media/icon.svg"
+        }
+      ]
+    },
+    "views": {
+      "work-firewall": [
+        {
+          "type": "webview",
+          "id": "workFirewall.dashboard",
+          "name": "Agent Intelligence"
+        }
+      ]
+    },
+    "commands": [
+      {
+        "command": "workFirewall.reset",
+        "title": "Work Firewall: Reset Session"
+      },
+      {
+        "command": "workFirewall.refresh",
+        "title": "Work Firewall: Refresh Dashboard"
+      }
+    ]
+  },
+  "scripts": {
+    "vscode:prepublish": "npm run compile",
+    "compile": "tsc -p ./",
+    "watch": "tsc -watch -p ./"
+  },
+  "devDependencies": {
+    "@types/node": "^20.19.43",
+    "@types/vscode": "^1.90.0",
+    "typescript": "^5.9.3"
+  }
+}

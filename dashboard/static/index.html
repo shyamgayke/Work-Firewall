@@ -3,63 +3,789 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Work Firewall — Dashboard</title>
+  <title>Work Firewall — Agent Intelligence Dashboard</title>
+  <meta name="description" content="Real-time dashboard showing AI agent tool-call savings, fact reuse, and codebase intelligence via Work Firewall." />
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=Geist+Mono:wght@400;500&display=swap" rel="stylesheet" />
+
   <style>
-    /* ── TODO (Person C, Hour 4-7): build the real dashboard here ── */
-    body { font-family: monospace; background: #0d1117; color: #c9d1d9; padding: 2rem; }
-    h1   { color: #58a6ff; }
-    pre  { background: #161b22; padding: 1rem; border-radius: 6px; }
-    .stat { display: inline-block; margin: 1rem; padding: 1rem 2rem;
-            background: #21262d; border-radius: 8px; text-align: center; }
-    .stat .num { font-size: 2rem; font-weight: bold; color: #3fb950; }
-    .stat .lbl { font-size: 0.8rem; color: #8b949e; }
+    /* ── Reset & Tokens ─────────────────────────────────────────────────── */
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    :root {
+      --bg:        #0a0c0f;
+      --surface:   #111418;
+      --surface2:  #181d24;
+      --border:    #1f2937;
+      --border2:   #2d3748;
+      --accent:    #6366f1;
+      --accent2:   #818cf8;
+      --green:     #22c55e;
+      --red:       #f87171;
+      --amber:     #fbbf24;
+      --blue:      #38bdf8;
+      --muted:     #6b7280;
+      --text:      #e2e8f0;
+      --text2:     #94a3b8;
+      --font:      'Inter', system-ui, sans-serif;
+      --mono:      'Geist Mono', 'Fira Code', monospace;
+      --radius:    10px;
+      --radius-lg: 16px;
+      --transition: 0.2s cubic-bezier(0.4,0,0.2,1);
+    }
+
+    html, body {
+      height: 100%;
+      background: var(--bg);
+      color: var(--text);
+      font-family: var(--font);
+      font-size: 14px;
+      line-height: 1.6;
+      overflow-x: hidden;
+    }
+
+    /* ── Layout ──────────────────────────────────────────────────────────── */
+    .layout {
+      min-height: 100vh;
+      display: grid;
+      grid-template-rows: auto 1fr;
+    }
+
+    /* ── Header ──────────────────────────────────────────────────────────── */
+    header {
+      background: var(--surface);
+      border-bottom: 1px solid var(--border);
+      padding: 0 24px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      height: 60px;
+      position: sticky;
+      top: 0;
+      z-index: 100;
+      backdrop-filter: blur(12px);
+    }
+
+    .logo {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      font-weight: 700;
+      font-size: 15px;
+      letter-spacing: -0.3px;
+    }
+
+    .logo-icon {
+      width: 32px;
+      height: 32px;
+      background: linear-gradient(135deg, #6366f1 0%, #8b5cf6 100%);
+      border-radius: 8px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 16px;
+      box-shadow: 0 0 20px rgba(99,102,241,0.4);
+    }
+
+    .header-right {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+    }
+
+    .live-badge {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      font-size: 11px;
+      font-weight: 600;
+      color: var(--green);
+      letter-spacing: 0.5px;
+      text-transform: uppercase;
+    }
+
+    .live-dot {
+      width: 7px;
+      height: 7px;
+      background: var(--green);
+      border-radius: 50%;
+      animation: pulse 1.5s infinite;
+    }
+
+    @keyframes pulse {
+      0%, 100% { opacity: 1; transform: scale(1); }
+      50%       { opacity: 0.5; transform: scale(1.3); }
+    }
+
+    .btn {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      padding: 6px 14px;
+      border-radius: 8px;
+      border: 1px solid var(--border2);
+      background: var(--surface2);
+      color: var(--text2);
+      font-family: var(--font);
+      font-size: 12px;
+      font-weight: 500;
+      cursor: pointer;
+      transition: all var(--transition);
+    }
+
+    .btn:hover {
+      border-color: var(--accent);
+      color: var(--accent2);
+      background: rgba(99,102,241,0.1);
+    }
+
+    .btn-danger:hover {
+      border-color: var(--red);
+      color: var(--red);
+      background: rgba(248,113,113,0.08);
+    }
+
+    /* ── Main ────────────────────────────────────────────────────────────── */
+    main {
+      padding: 24px;
+      max-width: 1400px;
+      margin: 0 auto;
+      width: 100%;
+      display: grid;
+      grid-template-rows: auto 1fr;
+      gap: 20px;
+    }
+
+    /* ── Stats Cards ─────────────────────────────────────────────────────── */
+    .stats-grid {
+      display: grid;
+      grid-template-columns: repeat(6, 1fr);
+      gap: 12px;
+    }
+
+    @media (max-width: 1100px) { .stats-grid { grid-template-columns: repeat(3, 1fr); } }
+    @media (max-width: 700px)  { .stats-grid { grid-template-columns: repeat(2, 1fr); } }
+
+    .stat-card {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: var(--radius-lg);
+      padding: 18px 20px;
+      position: relative;
+      overflow: hidden;
+      transition: border-color var(--transition), transform var(--transition);
+    }
+
+    .stat-card:hover {
+      border-color: var(--border2);
+      transform: translateY(-1px);
+    }
+
+    .stat-card::before {
+      content: '';
+      position: absolute;
+      inset: 0;
+      background: linear-gradient(135deg, var(--glow-color, transparent) 0%, transparent 60%);
+      opacity: 0.06;
+      pointer-events: none;
+    }
+
+    .stat-card.green { --glow-color: #22c55e; }
+    .stat-card.indigo { --glow-color: #6366f1; }
+    .stat-card.red { --glow-color: #f87171; }
+    .stat-card.amber { --glow-color: #fbbf24; }
+    .stat-card.blue { --glow-color: #38bdf8; }
+
+    .stat-label {
+      font-size: 11px;
+      font-weight: 600;
+      text-transform: uppercase;
+      letter-spacing: 0.6px;
+      color: var(--muted);
+      margin-bottom: 8px;
+    }
+
+    .stat-value {
+      font-size: 28px;
+      font-weight: 700;
+      font-family: var(--mono);
+      letter-spacing: -1px;
+      line-height: 1;
+      transition: color 0.3s;
+    }
+
+    .stat-sub {
+      font-size: 11px;
+      color: var(--muted);
+      margin-top: 4px;
+    }
+
+    .stat-card.green .stat-value { color: var(--green); }
+    .stat-card.red   .stat-value { color: var(--red); }
+    .stat-card.indigo .stat-value { color: var(--accent2); }
+    .stat-card.amber  .stat-value { color: var(--amber); }
+    .stat-card.blue   .stat-value { color: var(--blue); }
+
+    /* Rate bar */
+    .rate-bar-container {
+      margin-top: 8px;
+      background: var(--border);
+      border-radius: 4px;
+      height: 4px;
+      overflow: hidden;
+    }
+    .rate-bar-fill {
+      height: 100%;
+      background: linear-gradient(90deg, #22c55e, #6366f1);
+      border-radius: 4px;
+      transition: width 0.6s cubic-bezier(0.4,0,0.2,1);
+    }
+
+    /* ── Bottom panels ───────────────────────────────────────────────────── */
+    .panels {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 16px;
+    }
+
+    @media (max-width: 900px) { .panels { grid-template-columns: 1fr; } }
+
+    .panel {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: var(--radius-lg);
+      display: flex;
+      flex-direction: column;
+      min-height: 400px;
+      max-height: 560px;
+      overflow: hidden;
+    }
+
+    .panel-header {
+      padding: 14px 18px;
+      border-bottom: 1px solid var(--border);
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      flex-shrink: 0;
+    }
+
+    .panel-title {
+      font-size: 13px;
+      font-weight: 600;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+
+    .panel-count {
+      font-size: 11px;
+      background: var(--surface2);
+      border: 1px solid var(--border2);
+      border-radius: 20px;
+      padding: 2px 8px;
+      color: var(--muted);
+      font-family: var(--mono);
+    }
+
+    .panel-body {
+      flex: 1;
+      overflow-y: auto;
+      padding: 0;
+    }
+
+    .panel-body::-webkit-scrollbar { width: 4px; }
+    .panel-body::-webkit-scrollbar-track { background: transparent; }
+    .panel-body::-webkit-scrollbar-thumb { background: var(--border2); border-radius: 2px; }
+
+    /* ── Activity Feed ───────────────────────────────────────────────────── */
+    .activity-item {
+      display: flex;
+      align-items: flex-start;
+      gap: 12px;
+      padding: 12px 18px;
+      border-bottom: 1px solid var(--border);
+      animation: slide-in 0.25s ease;
+      transition: background var(--transition);
+    }
+
+    .activity-item:hover { background: var(--surface2); }
+
+    @keyframes slide-in {
+      from { opacity: 0; transform: translateX(-8px); }
+      to   { opacity: 1; transform: translateX(0); }
+    }
+
+    .activity-badge {
+      flex-shrink: 0;
+      width: 22px;
+      height: 22px;
+      border-radius: 50%;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 11px;
+      margin-top: 1px;
+    }
+
+    .activity-badge.avoided  { background: rgba(34,197,94,0.15);  color: var(--green); }
+    .activity-badge.executed { background: rgba(56,189,248,0.15); color: var(--blue); }
+    .activity-badge.stored   { background: rgba(99,102,241,0.15); color: var(--accent2); }
+
+    .activity-content { flex: 1; min-width: 0; }
+
+    .activity-call {
+      font-family: var(--mono);
+      font-size: 11px;
+      color: var(--text2);
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+
+    .activity-detail {
+      font-size: 12px;
+      color: var(--text);
+      margin-top: 2px;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+
+    .activity-time {
+      flex-shrink: 0;
+      font-size: 10px;
+      color: var(--muted);
+      font-family: var(--mono);
+    }
+
+    .empty-state {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      height: 200px;
+      color: var(--muted);
+      gap: 8px;
+    }
+
+    .empty-state .icon { font-size: 32px; opacity: 0.4; }
+    .empty-state p { font-size: 13px; }
+
+    /* ── Facts Panel ─────────────────────────────────────────────────────── */
+    .fact-item {
+      padding: 14px 18px;
+      border-bottom: 1px solid var(--border);
+      transition: background var(--transition);
+    }
+
+    .fact-item:hover { background: var(--surface2); }
+
+    .fact-item-header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      margin-bottom: 6px;
+    }
+
+    .fact-id {
+      font-family: var(--mono);
+      font-size: 10px;
+      color: var(--muted);
+      background: var(--surface2);
+      border: 1px solid var(--border2);
+      padding: 1px 6px;
+      border-radius: 4px;
+    }
+
+    .fact-badges { display: flex; align-items: center; gap: 6px; }
+
+    .badge {
+      font-size: 10px;
+      font-weight: 600;
+      padding: 2px 7px;
+      border-radius: 20px;
+      letter-spacing: 0.3px;
+    }
+
+    .badge-valid { background: rgba(34,197,94,0.1); color: var(--green); border: 1px solid rgba(34,197,94,0.25); }
+    .badge-stale { background: rgba(248,113,113,0.1); color: var(--red); border: 1px solid rgba(248,113,113,0.25); }
+
+    .fact-statement {
+      font-size: 12.5px;
+      color: var(--text);
+      line-height: 1.5;
+      margin-bottom: 8px;
+    }
+
+    .fact-meta {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      flex-wrap: wrap;
+    }
+
+    .fact-file {
+      font-family: var(--mono);
+      font-size: 10px;
+      color: var(--blue);
+      background: rgba(56,189,248,0.08);
+      padding: 1px 6px;
+      border-radius: 4px;
+    }
+
+    .fact-source {
+      font-family: var(--mono);
+      font-size: 10px;
+      color: var(--muted);
+    }
+
+    .btn-invalidate {
+      margin-left: auto;
+      font-size: 10px;
+      padding: 3px 8px;
+      border-radius: 5px;
+      border: 1px solid rgba(248,113,113,0.3);
+      background: transparent;
+      color: var(--red);
+      cursor: pointer;
+      font-family: var(--font);
+      transition: all var(--transition);
+    }
+    .btn-invalidate:hover { background: rgba(248,113,113,0.1); }
+
+    /* ── Bifrost badge ───────────────────────────────────────────────────── */
+    .bifrost-status {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      font-size: 11px;
+      color: var(--muted);
+      padding: 4px 10px;
+      border: 1px solid var(--border);
+      border-radius: 20px;
+    }
+
+    .bifrost-dot {
+      width: 6px;
+      height: 6px;
+      border-radius: 50%;
+      background: var(--muted);
+    }
+    .bifrost-dot.connected { background: var(--green); animation: pulse 2s infinite; }
+
+    /* ── Toasts ──────────────────────────────────────────────────────────── */
+    #toast {
+      position: fixed;
+      bottom: 24px;
+      right: 24px;
+      background: var(--surface2);
+      border: 1px solid var(--border2);
+      border-radius: 10px;
+      padding: 12px 18px;
+      font-size: 13px;
+      color: var(--text);
+      box-shadow: 0 8px 32px rgba(0,0,0,0.4);
+      transform: translateY(80px);
+      opacity: 0;
+      transition: all 0.3s cubic-bezier(0.4,0,0.2,1);
+      pointer-events: none;
+      z-index: 999;
+    }
+
+    #toast.show { transform: translateY(0); opacity: 1; }
   </style>
 </head>
 <body>
-  <h1>🔥 Work Firewall — Live Dashboard</h1>
-  <p style="color:#8b949e">Polling every 2 seconds...</p>
+<div class="layout">
+  <!-- ── Header ──────────────────────────────────────────────────────────── -->
+  <header>
+    <div class="logo">
+      <div class="logo-icon">🛡</div>
+      Work Firewall
+      <span style="color:var(--muted);font-weight:400;font-size:12px;">/ Agent Intelligence Dashboard</span>
+    </div>
+    <div class="header-right">
+      <div class="bifrost-status">
+        <div class="bifrost-dot" id="bifrost-dot"></div>
+        <span id="bifrost-label">Bifrost: checking…</span>
+      </div>
+      <div class="live-badge">
+        <div class="live-dot"></div>
+        Live
+      </div>
+      <button class="btn btn-danger" id="btn-reset" onclick="resetSession()">
+        ↺ Reset Session
+      </button>
+    </div>
+  </header>
 
-  <div id="stats-bar">
-    <div class="stat"><div class="num" id="total">–</div><div class="lbl">Total Calls</div></div>
-    <div class="stat"><div class="num" id="avoided" style="color:#3fb950">–</div><div class="lbl">✅ Avoided</div></div>
-    <div class="stat"><div class="num" id="executed" style="color:#f78166">–</div><div class="lbl">🔧 Executed</div></div>
-    <div class="stat"><div class="num" id="rate">–</div><div class="lbl">Avoidance Rate</div></div>
-  </div>
+  <main>
+    <!-- ── Stats Row ──────────────────────────────────────────────────────── -->
+    <div class="stats-grid">
+      <div class="stat-card">
+        <div class="stat-label">Total Calls</div>
+        <div class="stat-value" id="stat-total">0</div>
+        <div class="stat-sub">intercepted by firewall</div>
+      </div>
+      <div class="stat-card green">
+        <div class="stat-label">Avoided</div>
+        <div class="stat-value" id="stat-avoided">0</div>
+        <div class="stat-sub">tool calls skipped</div>
+      </div>
+      <div class="stat-card red">
+        <div class="stat-label">Executed</div>
+        <div class="stat-value" id="stat-executed">0</div>
+        <div class="stat-sub">real tool calls made</div>
+      </div>
+      <div class="stat-card indigo">
+        <div class="stat-label">Avoidance Rate</div>
+        <div class="stat-value" id="stat-rate">0%</div>
+        <div class="rate-bar-container">
+          <div class="rate-bar-fill" id="rate-bar" style="width:0%"></div>
+        </div>
+      </div>
+      <div class="stat-card amber">
+        <div class="stat-label">Latency Saved</div>
+        <div class="stat-value" id="stat-latency">0.0s</div>
+        <div class="stat-sub">wall-clock time</div>
+      </div>
+      <div class="stat-card blue">
+        <div class="stat-label">Cost Saved</div>
+        <div class="stat-value" id="stat-cost">$0.0000</div>
+        <div class="stat-sub">estimated API cost</div>
+      </div>
+    </div>
 
-  <h2>Stored Facts</h2>
-  <div id="facts-list"><p style="color:#8b949e">No facts yet.</p></div>
+    <!-- ── Panels ─────────────────────────────────────────────────────────── -->
+    <div class="panels">
+      <!-- Activity Feed -->
+      <div class="panel">
+        <div class="panel-header">
+          <div class="panel-title">
+            ⚡ Live Activity
+            <span class="panel-count" id="activity-count">0 events</span>
+          </div>
+        </div>
+        <div class="panel-body" id="activity-feed">
+          <div class="empty-state">
+            <div class="icon">📡</div>
+            <p>Waiting for tool calls…</p>
+          </div>
+        </div>
+      </div>
 
-  <script>
-    // TODO (Person C, Hour 4-7): expand this into a proper real-time activity feed
+      <!-- Facts Store -->
+      <div class="panel">
+        <div class="panel-header">
+          <div class="panel-title">
+            🧠 Knowledge Store
+            <span class="panel-count" id="facts-count">0 facts</span>
+          </div>
+        </div>
+        <div class="panel-body" id="facts-list">
+          <div class="empty-state">
+            <div class="icon">🔍</div>
+            <p>No facts stored yet</p>
+          </div>
+        </div>
+      </div>
+    </div>
+  </main>
+</div>
 
-    async function refresh() {
-      try {
-        // Stats
-        const s = await fetch('/api/stats').then(r => r.json());
-        document.getElementById('total').textContent   = s.total_calls;
-        document.getElementById('avoided').textContent = s.avoided;
-        document.getElementById('executed').textContent= s.executed;
-        document.getElementById('rate').textContent    = s.avoidance_rate + '%';
+<div id="toast"></div>
 
-        // Facts
-        const facts = await fetch('/api/facts').then(r => r.json());
-        const el = document.getElementById('facts-list');
-        if (!facts.length) {
-          el.innerHTML = '<p style="color:#8b949e">No facts yet.</p>';
-        } else {
-          el.innerHTML = facts.map(f => `
-            <pre><strong>#${f.id}</strong>  ${f.statement}
-  source: ${f.source_tool_call}
-  files : ${f.files.join(', ') || 'none'}</pre>
-          `).join('');
-        }
-      } catch(e) {
-        // server not running yet — silently ignore
-      }
+<script>
+  const API = '';  // same origin
+  let prevStats = {};
+  let prevActivityCount = 0;
+  let prevFactsCount = 0;
+
+  // ── Animate counter ─────────────────────────────────────────────────────
+  function animateValue(el, from, to, format = v => v) {
+    if (from === to) return;
+    const duration = 500;
+    const start = performance.now();
+    const diff = to - from;
+    function step(now) {
+      const p = Math.min((now - start) / duration, 1);
+      const eased = p < 0.5 ? 2*p*p : -1+(4-2*p)*p;
+      el.textContent = format(Math.round(from + diff * eased));
+      if (p < 1) requestAnimationFrame(step);
     }
+    requestAnimationFrame(step);
+  }
 
-    refresh();
-    setInterval(refresh, 2000);
-  </script>
+  // ── Update stats ─────────────────────────────────────────────────────────
+  async function updateStats() {
+    try {
+      const r = await fetch('/api/stats');
+      const d = await r.json();
+
+      const fields = [
+        ['stat-total',   d.total_calls,   v => v],
+        ['stat-avoided', d.avoided,       v => v],
+        ['stat-executed', d.executed,     v => v],
+      ];
+
+      for (const [id, val, fmt] of fields) {
+        const el = document.getElementById(id);
+        const prev = parseInt(el.textContent) || 0;
+        if (prev !== val) animateValue(el, prev, val, fmt);
+      }
+
+      document.getElementById('stat-rate').textContent = d.avoidance_rate + '%';
+      document.getElementById('rate-bar').style.width = d.avoidance_rate + '%';
+      document.getElementById('stat-latency').textContent = d.latency_saved_s + 's';
+      document.getElementById('stat-cost').textContent = '$' + d.cost_saved_usd.toFixed(4);
+
+    } catch(e) { /* dashboard still loading */ }
+  }
+
+  // ── Update activity feed ──────────────────────────────────────────────────
+  async function updateActivity() {
+    try {
+      const r = await fetch('/api/activity');
+      const d = await r.json();
+      const events = d.events || [];
+
+      document.getElementById('activity-count').textContent = events.length + ' events';
+
+      if (events.length === 0) {
+        document.getElementById('activity-feed').innerHTML = `
+          <div class="empty-state"><div class="icon">📡</div><p>Waiting for tool calls…</p></div>`;
+        return;
+      }
+
+      if (events.length === prevActivityCount) return;
+      prevActivityCount = events.length;
+
+      const html = events.slice(0, 50).map(ev => {
+        const icons = { avoided: '✅', executed: '🔧', stored: '💾' };
+        const classes = { avoided: 'avoided', executed: 'executed', stored: 'stored' };
+        const time = new Date(ev.ts * 1000);
+        const timeStr = time.toLocaleTimeString('en', { hour12: false, hour:'2-digit', minute:'2-digit', second:'2-digit' });
+
+        return `<div class="activity-item">
+          <div class="activity-badge ${classes[ev.type] || 'executed'}">${icons[ev.type] || '•'}</div>
+          <div class="activity-content">
+            <div class="activity-call">${escHtml(ev.call || '')}</div>
+            ${ev.statement ? `<div class="activity-detail">${escHtml(ev.statement)}</div>` : ''}
+          </div>
+          <div class="activity-time">${timeStr}</div>
+        </div>`;
+      }).join('');
+      document.getElementById('activity-feed').innerHTML = html;
+
+    } catch(e) {}
+  }
+
+  // ── Update facts panel ────────────────────────────────────────────────────
+  async function updateFacts() {
+    try {
+      const r = await fetch('/api/facts');
+      const d = await r.json();
+      const facts = d.facts || [];
+
+      document.getElementById('facts-count').textContent = facts.length + ' facts';
+
+      if (facts.length === 0) {
+        document.getElementById('facts-list').innerHTML = `
+          <div class="empty-state"><div class="icon">🔍</div><p>No facts stored yet</p></div>`;
+        return;
+      }
+
+      if (facts.length === prevFactsCount) return;
+      prevFactsCount = facts.length;
+
+      const html = facts.map(f => {
+        const validBadge = f.is_valid
+          ? '<span class="badge badge-valid">✓ Valid</span>'
+          : '<span class="badge badge-stale">⚠ Stale</span>';
+        const files = (f.files || []).map(fp => {
+          const name = fp.split(/[\\/]/).pop();
+          return `<span class="fact-file">${escHtml(name)}</span>`;
+        }).join('');
+        return `<div class="fact-item">
+          <div class="fact-item-header">
+            <span class="fact-id">#${f.id}</span>
+            <div class="fact-badges">${validBadge}</div>
+          </div>
+          <div class="fact-statement">${escHtml(f.statement)}</div>
+          <div class="fact-meta">
+            ${files}
+            <span class="fact-source">${escHtml((f.source_tool_call || '').substring(0, 50))}</span>
+            <button class="btn-invalidate" onclick="invalidateFact(${f.id})">🗑 Remove</button>
+          </div>
+        </div>`;
+      }).join('');
+      document.getElementById('facts-list').innerHTML = html;
+
+    } catch(e) {}
+  }
+
+  // ── Invalidate fact ───────────────────────────────────────────────────────
+  async function invalidateFact(id) {
+    try {
+      const r = await fetch(`/api/facts/${id}/invalidate`, { method: 'POST' });
+      if (r.ok) {
+        prevFactsCount = 0;  // force refresh
+        showToast(`🗑 Fact #${id} removed`);
+        updateFacts();
+      }
+    } catch(e) {}
+  }
+
+  // ── Reset session ─────────────────────────────────────────────────────────
+  async function resetSession() {
+    if (!confirm('Reset all session stats and clear the fact store?')) return;
+    try {
+      await fetch('/api/reset', { method: 'POST' });
+      prevFactsCount = 0;
+      prevActivityCount = 0;
+      showToast('↺ Session reset — fact store cleared');
+      updateAll();
+    } catch(e) {}
+  }
+
+  // ── Check Bifrost ─────────────────────────────────────────────────────────
+  async function checkBifrost() {
+    try {
+      const r = await fetch('http://localhost:8080/health', { signal: AbortSignal.timeout(1000) });
+      if (r.ok) {
+        document.getElementById('bifrost-dot').classList.add('connected');
+        document.getElementById('bifrost-label').textContent = 'Bifrost: connected';
+        return;
+      }
+    } catch(e) {}
+    document.getElementById('bifrost-label').textContent = 'Bifrost: offline (using Gemini direct)';
+  }
+
+  // ── Toast ─────────────────────────────────────────────────────────────────
+  function showToast(msg) {
+    const el = document.getElementById('toast');
+    el.textContent = msg;
+    el.classList.add('show');
+    setTimeout(() => el.classList.remove('show'), 3000);
+  }
+
+  function escHtml(s) {
+    return String(s)
+      .replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;')
+      .replace(/"/g,'&quot;');
+  }
+
+  // ── Poll loop ─────────────────────────────────────────────────────────────
+  async function updateAll() {
+    await Promise.all([updateStats(), updateActivity(), updateFacts()]);
+  }
+
+  updateAll();
+  checkBifrost();
+  setInterval(updateAll, 2000);
+  setInterval(checkBifrost, 10000);
+</script>
 </body>
 </html>

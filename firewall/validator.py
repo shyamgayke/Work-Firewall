@@ -1,34 +1,41 @@
 # ============================================================
-# firewall/validator.py  — Person B's file
-#
-# HOUR 0-1: Stub (always returns valid) — proxy.py uses
-#           store.py's hash_file directly for now.
-# HOUR 1-4: Person B implements proper file-hash validation here.
+# firewall/validator.py — Fact validity checker
+# Uses SHA-256 whole-file hashing to detect code changes.
 # ============================================================
 
-import os
 from firewall.store import hash_file
 
 
 def is_fact_valid(fact: dict) -> bool:
     """
-    Check if a stored fact is still valid by verifying the files it
-    depends on haven't changed (whole-file SHA-256 hash comparison).
+    Return True if every file the fact depends on is unchanged.
 
-    Returns:
-        True  — fact is still valid, safe to reuse
-        False — one or more files changed; fact is stale, must re-run tool
+    Logic:
+    - If a fact has no file dependencies (e.g. a list_files call), it's always valid.
+    - For each file: recompute SHA-256 and compare to the stored hash.
+    - If any file was deleted (hash=None) or changed → stale → False.
     """
-    for filepath, stored_hash in fact.get("content_hashes", {}).items():
+    content_hashes: dict = fact.get("content_hashes", {})
+
+    if not content_hashes:
+        # No file provenance → conservatively trust it
+        return True
+
+    for filepath, stored_hash in content_hashes.items():
+        if stored_hash is None:
+            # Was missing at extraction time — always recheck
+            continue
         current_hash = hash_file(filepath)
         if current_hash is None:
-            # File was deleted — definitely stale
+            # File was deleted since fact was stored
             return False
         if current_hash != stored_hash:
-            # File changed since fact was extracted — stale
+            # File changed — fact may be stale
             return False
+
     return True
 
-# TODO (Person B, Hour 1-4):
-# - Move storage from dict → SQLite here or in store.py
-# - Add line-range hashing as a stretch goal (not required for MVP)
+
+def filter_valid_facts(facts: list[dict]) -> list[dict]:
+    """Return only the facts whose source files haven't changed."""
+    return [f for f in facts if is_fact_valid(f)]

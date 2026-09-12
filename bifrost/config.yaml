@@ -1,0 +1,35 @@
+# Bifrost AI Gateway — Work Firewall Provider Config
+# Docs: https://docs.getbifrost.ai/quickstart/gateway/provider-configuration
+#
+# Start Bifrost with:  npx -y @maximhq/bifrost
+# Then open:          http://localhost:8080
+# Bifrost will auto-configure from this file.
+
+providers:
+  - provider: google
+    api_key: "${GOOGLE_API_KEY}"
+    models:
+      - model: gemini-3.6-flash
+        aliases:
+          - gemini-3.6-flash   # used by Work Firewall
+      - model: gemini-flash-latest
+
+settings:
+  port: 8080
+  log_level: info
+  enable_metrics: true
+  cors:
+    enabled: true
+    origins:
+      - "http://localhost:8000"    # Work Firewall dashboard
+      - "http://localhost:3000"
+
+  # Retry and failover
+  retries:
+    max_retries: 2
+    retry_on: [429, 500, 502, 503]
+
+  # Guardrails
+  guardrails:
+    max_tokens_per_request: 2000
+    rate_limit_rpm: 60

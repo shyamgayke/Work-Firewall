@@ -219,3 +219,17 @@ __marimo__/
 
 # Streamlit
 .streamlit/secrets.toml
+
+# Node / VS Code extension
+node_modules/
+vscode-extension/node_modules/
+vscode-extension/out/
+vscode-extension/package-lock.json
+
+# SQLite database (runtime state — not source)
+*.db
+*.db-journal
+*.db-wal
+*.db-shm
+firewall_facts.db
+bifrost/data/

@@ -1,26 +1,23 @@
 # ============================================================
-# tools/real_tools.py  — Person A's file
-# Stub placeholders so proxy.py can import them NOW.
-# Person A will replace these with real implementations.
+# tools/real_tools.py — Real tool implementations
 # ============================================================
 
 import os
 import re
 
-SAMPLE_REPO_DIR = os.path.join(os.path.dirname(__file__), "..", "sample_repo")
+SAMPLE_REPO_DIR = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "sample_repo"))
 
 
-def grep_search(pattern: str, path: str = None) -> str:
+def grep_search(pattern: str, directory: str = None, path: str = None) -> str:
     """
-    Search for a regex/string pattern inside files in sample_repo.
+    Search for a regex/string pattern inside .py files.
     Returns matching lines with filenames and line numbers.
-    Person A: replace stub logic here with your real implementation.
     """
-    search_dir = os.path.abspath(path or SAMPLE_REPO_DIR)
+    search_dir = os.path.abspath(directory or path or SAMPLE_REPO_DIR)
     results = []
 
     for root, _, files in os.walk(search_dir):
-        for fname in files:
+        for fname in sorted(files):
             if not fname.endswith(".py"):
                 continue
             fpath = os.path.join(root, fname)
@@ -34,13 +31,12 @@ def grep_search(pattern: str, path: str = None) -> str:
 
     if not results:
         return f"[grep_search] No matches found for pattern: '{pattern}'"
-    return "\n".join(results)
+    return "\n".join(results[:100])  # cap output
 
 
 def read_file(filepath: str) -> str:
     """
-    Read the contents of a file inside sample_repo.
-    Person A: adjust path handling / safety checks as needed.
+    Read the contents of a file. Accepts absolute or relative-to-sample-repo paths.
     """
     abs_path = os.path.abspath(
         os.path.join(SAMPLE_REPO_DIR, filepath)
@@ -59,16 +55,20 @@ def read_file(filepath: str) -> str:
 
 def list_files(directory: str = None) -> str:
     """
-    List Python files in the sample_repo (or a subdirectory of it).
+    List all files in a directory (default: sample_repo).
+    Returns relative paths for readability.
     """
-    search_dir = os.path.abspath(
-        os.path.join(SAMPLE_REPO_DIR, directory) if directory else SAMPLE_REPO_DIR
-    )
+    search_dir = os.path.abspath(directory or SAMPLE_REPO_DIR)
+    base = search_dir  # relative to search_dir itself
+
     files = []
     for root, _, fnames in os.walk(search_dir):
-        for fname in fnames:
-            rel = os.path.relpath(os.path.join(root, fname), SAMPLE_REPO_DIR)
+        for fname in sorted(fnames):
+            if fname.startswith("."):
+                continue
+            rel = os.path.relpath(os.path.join(root, fname), base)
             files.append(rel)
+
     if not files:
         return "[list_files] No files found."
     return "\n".join(sorted(files))
@@ -77,6 +77,6 @@ def list_files(directory: str = None) -> str:
 # Registry — proxy.py looks up tool functions by name from here
 TOOL_REGISTRY = {
     "grep_search": grep_search,
-    "read_file": read_file,
-    "list_files": list_files,
+    "read_file":   read_file,
+    "list_files":  list_files,
 }

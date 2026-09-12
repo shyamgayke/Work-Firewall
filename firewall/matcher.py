@@ -55,7 +55,7 @@ def find_matching_fact(
     if not valid_facts:
         return None
 
-    client, model_name = get_llm_config()
+    client, model_name, backend = get_llm_config()
 
     if client is None:
         # Fallback offline heuristic if no API key is set
